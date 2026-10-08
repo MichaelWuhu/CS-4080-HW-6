@@ -6,13 +6,15 @@ import java.util.Map;
 
 class LoxClass extends LoxInstance implements LoxCallable {
   final String name;
+  final LoxClass superclass;
   private final Map<String, LoxFunction> methods;
   private final Map<String, LoxFunction> staticMethods;
 
-  LoxClass(String name, Map<String, LoxFunction> methods,
+  LoxClass(String name, LoxClass superclass, Map<String, LoxFunction> methods,
            Map<String, LoxFunction> staticMethods) {
     super(null);
     this.name = name;
+    this.superclass = superclass;
     this.methods = methods;
     this.staticMethods = staticMethods;
   }
@@ -24,6 +26,7 @@ class LoxClass extends LoxInstance implements LoxCallable {
       if (method.isGetter()) return method.call(interpreter, java.util.Collections.emptyList());
       return method;
     }
+    if (superclass != null) return superclass.get(token, interpreter);
     throw new RuntimeError(token, "Undefined property '" + token.lexeme + "'.");
   }
 
@@ -42,7 +45,9 @@ class LoxClass extends LoxInstance implements LoxCallable {
   }
 
   LoxFunction findMethod(String name) {
-    return methods.get(name);
+    if (methods.containsKey(name)) return methods.get(name);
+    if (superclass != null) return superclass.findMethod(name);
+    return null;
   }
 
   @Override

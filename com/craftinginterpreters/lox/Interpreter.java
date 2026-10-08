@@ -69,13 +69,33 @@ import java.util.Map;
    }
 
    @Override
+   public Void visitAssertStmt(Stmt.Assert stmt) {
+     if (!isTruthy(evaluate(stmt.condition))) {
+       throw new RuntimeError(stmt.keyword, "Assertion failed.");
+     }
+     return null;
+   }
+
+   @Override
    public Void visitBreakStmt(Stmt.Break stmt) {
      throw new BreakException();
    }
 
    @Override
    public Void visitClassStmt(Stmt.Class stmt) {
+     LoxClass superclass = null;
+     if (stmt.superclass != null) {
+       Object value = evaluate(stmt.superclass);
+       if (!(value instanceof LoxClass)) {
+         throw new RuntimeError(stmt.superclass.name, "Superclass must be a class.");
+       }
+       superclass = (LoxClass) value;
+     }
      environment.define(stmt.name.lexeme, null);
+     if (superclass != null) {
+       environment = new Environment(environment);
+       environment.define("super", superclass);
+     }
      Map<String, LoxFunction> methods = new HashMap<>();
      Map<String, LoxFunction> staticMethods = new HashMap<>();
      for (Stmt.Function method : stmt.methods) {
@@ -84,7 +104,8 @@ import java.util.Map;
        if (method.isStatic) staticMethods.put(method.name.lexeme, function);
        else methods.put(method.name.lexeme, function);
      }
-     LoxClass klass = new LoxClass(stmt.name.lexeme, methods, staticMethods);
+     LoxClass klass = new LoxClass(stmt.name.lexeme, superclass, methods, staticMethods);
+     if (superclass != null) environment = environment.enclosing;
      environment.assign(stmt.name, klass);
      return null;
    }
@@ -294,6 +315,19 @@ import java.util.Map;
    @Override
    public Object visitThisExpr(Expr.This expr) {
      return lookUpVariable(expr.keyword, expr);
+   }
+
+   @Override
+   public Object visitSuperExpr(Expr.Super expr) {
+     int distance = locals.get(expr);
+     LoxClass superclass = (LoxClass) environment.getAt(distance, "super");
+     LoxInstance object = (LoxInstance) environment.getAt(distance - 1, "this");
+     LoxFunction method = superclass.findMethod(expr.method.lexeme);
+     if (method == null) {
+       throw new RuntimeError(expr.method,
+           "Undefined property '" + expr.method.lexeme + "'.");
+     }
+     return method.bind(object);
    }
 
    private Object numericBinary(Expr.Binary expr, Object left, Object right, char operator) {

@@ -37,6 +37,11 @@
 
   private Stmt classDeclaration() {
     Token name = consume(IDENTIFIER, "Expect class name.");
+    Expr.Variable superclass = null;
+    if (match(LESS)) {
+      consume(IDENTIFIER, "Expect superclass name.");
+      superclass = new Expr.Variable(previous());
+    }
     consume(LEFT_BRACE, "Expect '{' before class body.");
     List<Stmt.Function> methods = new ArrayList<>();
     while (!check(RIGHT_BRACE) && !isAtEnd()) {
@@ -68,7 +73,7 @@
       methods.add(new Stmt.Function(methodName, parameters, body, isStatic, isGetter));
     }
     consume(RIGHT_BRACE, "Expect '}' after class body.");
-    return new Stmt.Class(name, methods);
+    return new Stmt.Class(name, superclass, methods);
   }
 
    private Stmt varDeclaration() {
@@ -80,6 +85,7 @@
    }
 
   private Stmt statement() {
+    if (match(ASSERT)) return assertStatement();
     if (match(IF)) return ifStatement();
     if (match(WHILE)) return whileStatement();
     if (match(FOR)) return forStatement();
@@ -88,6 +94,13 @@
     if (match(PRINT)) return printStatement();
      if (match(LEFT_BRACE)) return new Stmt.Block(block());
      return expressionStatement();
+  }
+
+  private Stmt assertStatement() {
+    Token keyword = previous();
+    Expr condition = expression();
+    consume(SEMICOLON, "Expect ';' after assertion.");
+    return new Stmt.Assert(keyword, condition);
   }
 
   private Stmt ifStatement() {
@@ -376,6 +389,12 @@
      if (match(NIL)) return new Expr.Literal(null);
      if (match(NUMBER, STRING)) return new Expr.Literal(previous().literal);
      if (match(THIS)) return new Expr.This(previous());
+     if (match(SUPER)) {
+       Token keyword = previous();
+       consume(DOT, "Expect '.' after 'super'.");
+       Token method = consume(IDENTIFIER, "Expect superclass method name.");
+       return new Expr.Super(keyword, method);
+     }
      if (match(IDENTIFIER)) return new Expr.Variable(previous());
 
      if (match(LEFT_PAREN)) {
@@ -393,6 +412,7 @@
        if (previous().type == SEMICOLON) return;
        switch (peek().type) {
         case CLASS:
+        case ASSERT:
         case BREAK:
          case FUN:
          case VAR:

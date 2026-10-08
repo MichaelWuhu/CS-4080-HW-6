@@ -5,6 +5,7 @@ import java.util.List;
 abstract class Stmt {
   interface Visitor<R> {
     R visitBlockStmt(Block stmt);
+    R visitAssertStmt(Assert stmt);
     R visitBreakStmt(Break stmt);
     R visitClassStmt(Class stmt);
     R visitExpressionStmt(Expression stmt);
@@ -26,6 +27,21 @@ abstract class Stmt {
     @Override
     <R> R accept(Visitor<R> visitor) {
       return visitor.visitBlockStmt(this);
+    }
+  }
+
+  static class Assert extends Stmt {
+    final Expr condition;
+    final Token keyword;
+
+    Assert(Token keyword, Expr condition) {
+      this.keyword = keyword;
+      this.condition = condition;
+    }
+
+    @Override
+    <R> R accept(Visitor<R> visitor) {
+      return visitor.visitAssertStmt(this);
     }
   }
 
@@ -87,10 +103,12 @@ abstract class Stmt {
 
   static class Class extends Stmt {
     final Token name;
+    final Expr.Variable superclass;
     final java.util.List<Stmt.Function> methods;
 
-    Class(Token name, java.util.List<Stmt.Function> methods) {
+    Class(Token name, Expr.Variable superclass, java.util.List<Stmt.Function> methods) {
       this.name = name;
+      this.superclass = superclass;
       this.methods = methods;
     }
 

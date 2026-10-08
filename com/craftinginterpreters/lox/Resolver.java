@@ -8,7 +8,7 @@ import java.util.Map;
 class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   private final Interpreter interpreter;
   private final List<Map<String, Boolean>> scopes = new ArrayList<>();
-  private enum ClassType { NONE, CLASS }
+  private enum ClassType { NONE, CLASS, SUBCLASS }
   private ClassType currentClass = ClassType.NONE;
 
   Resolver(Interpreter interpreter) {
@@ -32,19 +32,35 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     return null;
   }
 
+  @Override
+  public Void visitAssertStmt(Stmt.Assert stmt) {
+    resolve(stmt.condition);
+    return null;
+  }
+
   @Override public Void visitBreakStmt(Stmt.Break stmt) { return null; }
 
   @Override
   public Void visitClassStmt(Stmt.Class stmt) {
     ClassType enclosingClass = currentClass;
-    currentClass = ClassType.CLASS;
+    currentClass = stmt.superclass == null ? ClassType.CLASS : ClassType.SUBCLASS;
     declare(stmt.name);
     define(stmt.name);
+
+    if (stmt.superclass != null && stmt.name.lexeme.equals(stmt.superclass.name.lexeme)) {
+      Lox.error(stmt.superclass.name, "A class can't inherit from itself.");
+    }
+    if (stmt.superclass != null) {
+      resolve(stmt.superclass);
+      beginScope();
+      scopes.get(scopes.size() - 1).put("super", true);
+    }
 
     beginScope();
     scopes.get(scopes.size() - 1).put("this", true);
     for (Stmt.Function method : stmt.methods) resolveFunction(method);
     endScope();
+    if (stmt.superclass != null) endScope();
     currentClass = enclosingClass;
     return null;
   }
@@ -169,6 +185,17 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     if (currentClass == ClassType.NONE) {
       Lox.error(expr.keyword, "Can't use 'this' outside of a class.");
       return null;
+    }
+    resolveLocal(expr, expr.keyword);
+    return null;
+  }
+
+  @Override
+  public Void visitSuperExpr(Expr.Super expr) {
+    if (currentClass == ClassType.NONE) {
+      Lox.error(expr.keyword, "Can't use 'super' outside of a class.");
+    } else if (currentClass == ClassType.CLASS) {
+      Lox.error(expr.keyword, "Can't use 'super' in a class with no superclass.");
     }
     resolveLocal(expr, expr.keyword);
     return null;
